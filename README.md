@@ -7,3 +7,6 @@ To run, use:
 node index.js</code></pre>
 
 Then open <code>http://localhost:3000</code> in your browser to play the game.
+
+## Screenshot
+![Screenshot of the trivia game](https://github.com/Draglan/nodejs-trivia-server/blob/master/screenshot.png)
