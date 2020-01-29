@@ -6,4 +6,4 @@ To run, use:
 <pre><code>npm install
 node index.js</code></pre>
 
-Then open <code>index.html</code> in your browser to play the game.
+Then open <code>http://localhost:3000</code> in your browser to play the game.
