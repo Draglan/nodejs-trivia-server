@@ -30,7 +30,7 @@ function getTriviaQuestionAsync(onComplete, onError)
             response =>
             {
                 response = response.data.results[0];
-                console.log(response);
+                /*console.log(response);*/
 
                 // Get the question data we want from the API response.
                 let question = response.question;

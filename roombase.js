@@ -63,6 +63,12 @@ class RoomBase
         user.socket.emit('user list', userList);
     }
 
+    // Send a message from the given user to everyone in the room.
+    sendMessage(user, message)
+    {
+        this.io.to(this.id).emit('message', {nickname: user.nickname, message: message});
+    }
+
     // Returns true if the given user is in this room,
     // false otherwise.
     isUserInRoom(user)

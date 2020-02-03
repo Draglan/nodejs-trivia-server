@@ -26,7 +26,6 @@ class TriviaQuestion
         this.question           = question;
         this.answers            = answers;
         this.correctAnswerIndex = correctAnswerIndex;
-
         this.category           = '';
         this.difficulty         = '';
     }

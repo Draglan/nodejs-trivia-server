@@ -31,8 +31,9 @@ class User {
         this.lobby       = lobby;
         this.room        = null;
 
-        // Initialize this user's socket events.
-        initializeUser(this);
+        // Wait for the user to get a nickname before listening for
+        // other events.
+        waitForNickname(this);
     }
 
     hasSelectedAnswer()     { return this.answerIndex != -1;         }
@@ -46,7 +47,7 @@ class User {
     setRoom(room)
     {
         // Don't do anything if the user is being set
-        // to the room its already in.
+        // to the room it's already in.
         if (this.room === room) return;
 
         // Remove the socket from the current room, if any.
@@ -92,8 +93,12 @@ function initializeUser(user)
             console.log(`${user.nickname} disconnected.`);
             allUsers.splice(allUsers.findIndex((u) => user === u), 1);
 
-            // Remove the user from the room they are currently in.
-            user.room.removeUser(user);
+            // Remove the user from the room they are currently in, if they are
+            // in a room at all.
+            if (user.room)
+            {
+                user.room.removeUser(user);
+            }
         }
     );
 
@@ -116,6 +121,8 @@ function initializeUser(user)
     (
         'leave room', () =>
         {
+            if (!user.room) return;
+
             console.log(`${user.nickname} wants to leave room ${user.room.id}`);
             user.lobby.addUser(user);
         }
@@ -131,6 +138,49 @@ function initializeUser(user)
             newRoom.addUser(user);
         }
     );
+
+    // Receive a chat message from the user and emit it to everyone
+    // in the same room.
+    user.socket.on
+    (
+        'message', (message) =>
+        {
+            console.log(`${user.nickname}: ${message}`)
+            if (message && message.length > 0 && user.room)
+            {
+                user.room.sendMessage(user, message);
+            }
+        }
+    );
+}
+
+function waitForNickname(user)
+{
+    // Set the user's nickname and add them to the lobby.
+    // Only works if the user hasn't set a nickname yet
+    // and the provided nickname is valid.
+    user.socket.on
+    (
+        'set nickname', (nickname) =>
+        {
+            if (user.nickname.length === 0 && isNicknameValid(nickname))
+            {
+                user.nickname = nickname;
+                console.log("Setting nickname to " + user.nickname);
+                initializeUser(user);
+                user.lobby.addUser(user);
+            }
+            else
+            {
+                user.socket.emit('invalid nickname');
+            }
+        }
+    );
+}
+
+function isNicknameValid(nickname)
+{
+    return nickname.length >= 1 && nickname.length <= 16;
 }
 
 module.exports.User     = User;

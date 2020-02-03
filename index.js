@@ -16,16 +16,23 @@ app.use(bodyParser);
 // Initialize the User Module.
 user.init(io);
 
-let userTag = 0;
-let lobby   = new Lobby(io);
+let lobby = new Lobby(io);
+
+// Create a bunch of test rooms. Stagger them over time.
+for (let i=0; i<10; ++i)
+{
+    setTimeout(trivia.makeNewRoom, 5000*i, io, false);
+}
 
 io.on
 (
     'connection', 
     (socket) => 
     {
-        let newUser = new user.User(socket, `user${userTag++}`, lobby);
-        lobby.addUser(newUser);
+        let newUser = new user.User(socket, '', lobby);
+        user.allUsers.push(newUser);
+        newUser.socket.emit('need nickname');
+        console.log("User connected.");
     }
 );
 

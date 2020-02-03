@@ -2,25 +2,30 @@
 
 From server to user:
 
-    | Event Name        | Description                                                               |
-    | ----------------- | ------------------------------------------------------------------------- |
-    | seconds left      | Sets the number of seconds left on the current question.                  |
-    | set question      | Sets the current question and its answers.                                |
-    | answer result     | Sent to each user to notify them if they got the question right or wrong. |
-    | user joined       | Sent when another user joins the room or lobby.                           |
-    | user left         | Sent when another user leaves the room or lobby.                          |
-    | user list         | Sent to users when they join a room or the lobby.                         |
-    | entered game room | Sent to the user when they enter a room.                                  |
-    | left game room    | Sent to the user when they leave a room.                                  |
-    | new room          | Sent to users in the lobby when a new room is created.                    |
-    | delete room       | Sent to users in the lobby when a room is deleted.                        |
-    | room list         | Sent to users when they join the lobby.                                   |
+    | Event Name        | Description                                                                                 |
+    | ----------------- | ------------------------------------------------------------------------------------------- |
+    | seconds left      | Sets the number of seconds left on the current question.                                    |
+    | set question      | Sets the current question and its answers.                                                  |
+    | answer result     | Sent to each user to notify them if they got the question right or wrong.                   |
+    | user joined       | Sent when another user joins the room or lobby.                                             |
+    | user left         | Sent when another user leaves the room or lobby.                                            |
+    | user list         | Sent to users when they join a room or the lobby.                                           |
+    | entered game room | Sent to the user when they enter a room.                                                    |
+    | left game room    | Sent to the user when they leave a room.                                                    |
+    | new room          | Sent to users in the lobby when a new room is created.                                      |
+    | delete room       | Sent to users in the lobby when a room is deleted.                                          |
+    | room list         | Sent to users when they join the lobby.                                                     |
+    | *need nickname    | Sent to the user when they first connect, telling them that they should set their nickname. |
+    | *invalid nickname | Sent to the user when they select an invalid nickname.                                      |
+    | *message          | Sent to the user when someone in the room sends a message.                                  |
 
 From user to server:
 
-    | Event Name  | Description                                    |
-    | ----------- | ---------------------------------------------- |
-    | answer      | Sets the user's answer selection.              |
-    | join room   | A request to join a room.                      |
-    | leave room  | A request to leave a room and go to the lobby. |
-    | create room | A request to create a brand new room.          |
+    | Event Name    | Description                                    |
+    | ------------- | ---------------------------------------------- |
+    | answer        | Sets the user's answer selection.              |
+    | join room     | A request to join a room.                      |
+    | leave room    | A request to leave a room and go to the lobby. |
+    | create room   | A request to create a brand new room.          |
+    | *set nickname | Sets the user's nickname.                      |
+    | *message      | Send a chat message.                           |
