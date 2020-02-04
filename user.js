@@ -1,4 +1,5 @@
-const trivia = require('./trivia-room');
+const trivia    = require('./trivia-room');
+const questions = require('./question-source');
 
 // The list of connected users.
 let allUsers = [];
@@ -85,23 +86,6 @@ function initializeUser(user)
         }
     );
 
-    // Remove the user from the user list when they disconnect.
-    user.socket.on
-    (
-        'disconnect', () =>
-        {
-            console.log(`${user.nickname} disconnected.`);
-            allUsers.splice(allUsers.findIndex((u) => user === u), 1);
-
-            // Remove the user from the room they are currently in, if they are
-            // in a room at all.
-            if (user.room)
-            {
-                user.room.removeUser(user);
-            }
-        }
-    );
-
     // Add the user to the given room if it exists.
     user.socket.on
     (
@@ -131,10 +115,11 @@ function initializeUser(user)
     // Create a new room and add the user to it.
     user.socket.on
     (
-        'create room', () =>
+        'create room', (roomConfig) => // see class RoomConfiguration in trivia-room.js
         {
-            console.log(`${user.nickname} is creating a new room.`);
-            let newRoom = trivia.makeNewRoom(io);
+            console.log(`${user.nickname} is creating a new room with the following config:`);
+            console.log(roomConfig);
+            let newRoom = trivia.makeNewRoom(io, true, roomConfig.difficulty, roomConfig.category);
             newRoom.addUser(user);
         }
     );
@@ -152,6 +137,22 @@ function initializeUser(user)
             }
         }
     );
+
+    // When a user requests a list of available categories,
+    // send it to them.
+    user.socket.on
+    (
+        'get category list', () =>
+        {
+            questions.getCategories().then
+            (
+                (categories) =>
+                {
+                    user.socket.emit('category list', categories);
+                }
+            );
+        }
+    );
 }
 
 function waitForNickname(user)
@@ -165,14 +166,40 @@ function waitForNickname(user)
         {
             if (user.nickname.length === 0 && isNicknameValid(nickname))
             {
-                user.nickname = nickname;
-                console.log("Setting nickname to " + user.nickname);
-                initializeUser(user);
-                user.lobby.addUser(user);
+                if (!isNicknameTaken(nickname))
+                {
+                    user.nickname = nickname;
+                    initializeUser(user);
+                    user.lobby.addUser(user);
+                    user.socket.emit('good nickname');
+
+                    console.log("Setting nickname to " + user.nickname);
+                }
+                else
+                {
+                    user.socket.emit('nickname taken');
+                }
             }
             else
             {
                 user.socket.emit('invalid nickname');
+            }
+        }
+    );
+    
+    // Remove the user from the user list when they disconnect.
+    user.socket.on
+    (
+        'disconnect', () =>
+        {
+            console.log(`${user.nickname || '<nameless user>'} disconnected.`);
+            allUsers.splice(allUsers.findIndex((u) => user === u), 1);
+
+            // Remove the user from the room they are currently in, if they are
+            // in a room at all.
+            if (user.room)
+            {
+                user.room.removeUser(user);
             }
         }
     );
@@ -181,6 +208,11 @@ function waitForNickname(user)
 function isNicknameValid(nickname)
 {
     return nickname.length >= 1 && nickname.length <= 16;
+}
+
+function isNicknameTaken(nickname)
+{
+    return allUsers.find(u => u.nickname.toLowerCase() === nickname.toLowerCase()) != undefined;
 }
 
 module.exports.User     = User;

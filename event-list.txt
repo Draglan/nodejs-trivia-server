@@ -15,17 +15,21 @@ From server to user:
     | new room          | Sent to users in the lobby when a new room is created.                                      |
     | delete room       | Sent to users in the lobby when a room is deleted.                                          |
     | room list         | Sent to users when they join the lobby.                                                     |
-    | *need nickname    | Sent to the user when they first connect, telling them that they should set their nickname. |
-    | *invalid nickname | Sent to the user when they select an invalid nickname.                                      |
-    | *message          | Sent to the user when someone in the room sends a message.                                  |
+    | need nickname     | Sent to the user when they first connect, telling them that they should set their nickname. |
+    | invalid nickname  | Sent to the user when they select an invalid nickname.                                      |
+    | good nickname     | Sent to the user when their nickname was valid.                                             |
+    | nickname taken    | Sent to the user when the nickname they chose was already taken.                            |
+    | message           | Sent to the user when someone in the room sends a message.                                  |
+    | category list     | Contains a list of categories available to users.                                           |
 
 From user to server:
 
-    | Event Name    | Description                                    |
-    | ------------- | ---------------------------------------------- |
-    | answer        | Sets the user's answer selection.              |
-    | join room     | A request to join a room.                      |
-    | leave room    | A request to leave a room and go to the lobby. |
-    | create room   | A request to create a brand new room.          |
-    | *set nickname | Sets the user's nickname.                      |
-    | *message      | Send a chat message.                           |
+    | Event Name        | Description                                       |
+    | ----------------- | ------------------------------------------------- |
+    | answer            | Sets the user's answer selection.                 |
+    | join room         | A request to join a room.                         |
+    | leave room        | A request to leave a room and go to the lobby.    |
+    | create room       | A request to create a brand new room.             |
+    | set nickname      | Sets the user's nickname.                         |
+    | message           | Send a chat message.                              |
+    | get category list | Return the list of available question categories. |

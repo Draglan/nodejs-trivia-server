@@ -31,12 +31,38 @@ class TriviaQuestion
     }
 }
 
+/*
+    The rules a particular room abides by.
+*/
+class RoomConfiguration
+{
+    constructor(category = -1, difficulty = '')
+    {
+        this.category   = category;   // -1 if no category
+        this.difficulty = difficulty; // easy, medium, or hard, or none
+    }
+
+    // Returns true if the room is set to a specific category, or false
+    // if the room is for any category.
+    hasCategory()
+    {
+        return this.category != -1;
+    }
+
+    // Returns true if the room is set to a specific difficulty (easy, medium,
+    // or hard), or false if the room is for any difficulty.
+    hasDifficulty()
+    {
+        return this.difficulty != '';
+    }
+}
+
 // Represents a room in which trivia players play a 
 // session. Each room represents a separate game of
 // trivia.
 class TriviaRoom extends RoomBase
 {
-    constructor(ioInstance, deleteOnLastUser = true)
+    constructor(ioInstance, deleteOnLastUser = true, config)
     {
         super(ioInstance);
 
@@ -46,6 +72,7 @@ class TriviaRoom extends RoomBase
         this.secondsLeft      = this.maxSeconds;
         this.currentQuestion  = null;
         this.deleteOnLastUser = deleteOnLastUser;
+        this.config           = config;
 
         this.requestNewQuestion();
     }
@@ -141,6 +168,7 @@ class TriviaRoom extends RoomBase
     {
         questionSource.getTriviaQuestionAsync
         (
+            this.config,
             (q) => 
             {
                 this.setNewQuestion(q);
@@ -166,10 +194,13 @@ function generateId()
 
 // Make a new trivia room. ioInstance is the socket.io handle,
 // and is needed by the room to send and receive messages.
-function makeNewRoom(ioInstance, deleteOnLastUser = true)
+function makeNewRoom(ioInstance, deleteOnLastUser = true, difficulty = '', category = -1)
 {
-    let room            = new TriviaRoom(ioInstance, deleteOnLastUser);
+    let config = new RoomConfiguration(category, difficulty);
+    let room   = new TriviaRoom(ioInstance, deleteOnLastUser, config);
+
     rooms[room.getId()] = room;
+
     triviaEventEmitter.emit(events.NEW_ROOM, room);
     return room;
 }
@@ -210,6 +241,7 @@ function timer(room)
 
 module.exports.TriviaRoom         = TriviaRoom;
 module.exports.TriviaQuestion     = TriviaQuestion;
+module.exports.RoomConfiguration  = RoomConfiguration;
 module.exports.makeNewRoom        = makeNewRoom;
 module.exports.getRoomById        = getRoomById;
 module.exports.getRoomIdList      = getRoomIdList;

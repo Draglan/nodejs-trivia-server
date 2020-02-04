@@ -6,6 +6,7 @@ const bodyParser = require('body-parser');
 const user       = require('./user');
 const trivia     = require('./trivia-room');
 const Lobby      = require('./lobby');
+const questions  = require('./question-source');
 
 // Serve static files from the current working directory.
 app.use(express.static('.'));
@@ -19,10 +20,15 @@ user.init(io);
 let lobby = new Lobby(io);
 
 // Create a bunch of test rooms. Stagger them over time.
-for (let i=0; i<10; ++i)
+/*
+for (let i=0; i<3; ++i)
 {
-    setTimeout(trivia.makeNewRoom, 5000*i, io, false);
+    setTimeout(trivia.makeNewRoom, 10000*i, io, false);
 }
+*/
+
+// Output a list of all of the available categories. For debugging purposes.
+questions.getCategories().then((categories) => console.log(categories));
 
 io.on
 (
@@ -36,5 +42,5 @@ io.on
     }
 );
 
-console.log("Listening on port 3000...");
+console.log('Trivia server active on port 3000.');
 http.listen(3000);

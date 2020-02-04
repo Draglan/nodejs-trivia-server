@@ -1,36 +1,24 @@
 const trivia = require('./trivia-room');
 const axios  = require('axios');
 
-let allQuestions = [];
-let isInitialized = false;
+let categories = [];
 
-function getTriviaQuestion() 
+function getTriviaQuestionAsync(config, onComplete, onError)
 {
-    if (!isInitialized)
-    {
-        for (let i = 0; i < 50; ++i)
-        {
-            allQuestions.push
-            (
-                new trivia.TriviaQuestion(`Question ${i}`, ['Answer1', 'Answer2'], 0)
-            );
-        }
+    let url = 'https://opentdb.com/api.php?amount=1';
 
-        isInitialized = true;
-    }
+    if (config.difficulty.length > 0) url += `&difficulty=${config.difficulty}`;
+    if (config.category != -1)        url += `&category=${config.category}`;
 
-    return allQuestions[Math.floor(Math.random() * allQuestions.length)];
-}
+    console.log(config);
+    console.log('getting from url' + url);
 
-function getTriviaQuestionAsync(onComplete, onError)
-{
-    axios.get('https://opentdb.com/api.php?amount=1')
+    axios.get(url)
         .then
         (
             response =>
             {
                 response = response.data.results[0];
-                /*console.log(response);*/
 
                 // Get the question data we want from the API response.
                 let question = response.question;
@@ -61,5 +49,37 @@ function getTriviaQuestionAsync(onComplete, onError)
         .catch(error => onError(error));
 }
 
-module.exports.getTriviaQuestion      = getTriviaQuestion;
+// Return a promise that resolves with an array of all of the
+// categories provided by the question source. Each category
+// is an object with two parameters: id (a number), and name
+// (a string).
+//
+// Example: [ {id: 9, name: "General Knowledge"}, ... ]
+function getCategories()
+{ 
+    if (categories.length === 0)
+    {
+        // If the response isn't cached, make a request for the
+        // category list.
+        return axios.get('https://opentdb.com/api_category.php')
+            .then
+            (
+                response =>
+                {
+                    categories = response.data.trivia_categories;
+                    return categories;
+                }
+            );
+    }
+    else
+    {
+        // ...Otherwise, return the cached response.
+        return new Promise
+        (
+            (resolve, _) => resolve(categories)
+        );
+    }
+}
+
 module.exports.getTriviaQuestionAsync = getTriviaQuestionAsync;
+module.exports.getCategories          = getCategories;
