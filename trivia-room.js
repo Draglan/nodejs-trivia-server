@@ -14,8 +14,16 @@ const triviaEventEmitter = new TriviaEventEmitter();
 // Trivia room event names
 const events = 
 {
-    NEW_ROOM   : 'newRoom',   // Args: the room that was created
-    DELETE_ROOM: 'deleteRoom' // Args: the room that was deleted
+    NEW_ROOM   : 'newRoom',    // Args: the room that was created
+    DELETE_ROOM: 'deleteRoom', // Args: the room that was deleted
+    UPDATE_ROOM: 'updateRoom'  // Args: the room that was updated
+}
+
+const difficulty =
+{
+    EASY  : 'easy',
+    MEDIUM: 'medium',
+    HARD  : 'hard'
 }
 
 // Represents a trivia question.
@@ -26,8 +34,31 @@ class TriviaQuestion
         this.question           = question;
         this.answers            = answers;
         this.correctAnswerIndex = correctAnswerIndex;
-        this.category           = '';
-        this.difficulty         = '';
+        this.categoryName       = '';
+        this.difficulty         = difficulty.MEDIUM;
+    }
+
+    getPointValue()
+    {
+        switch (this.difficulty)
+        {
+            case difficulty.EASY  : return 10;
+            case difficulty.MEDIUM: return 25;
+            case difficulty.HARD  : return 50;
+            default               : return 0;
+        }
+    }
+}
+
+/*
+    Represents a trivia category.
+*/
+class Category
+{
+    constructor(id = 0, name = '')
+    {
+        this.id   = id;
+        this.name = name;
     }
 }
 
@@ -36,24 +67,24 @@ class TriviaQuestion
 */
 class RoomConfiguration
 {
-    constructor(category = -1, difficulty = '')
+    constructor(category = null, difficulty = null)
     {
-        this.category   = category;   // -1 if no category
-        this.difficulty = difficulty; // easy, medium, or hard, or none
+        this.category   = category;   // null if no category
+        this.difficulty = difficulty; // easy, medium, hard, or null
     }
 
     // Returns true if the room is set to a specific category, or false
     // if the room is for any category.
     hasCategory()
     {
-        return this.category != -1;
+        return this.category != null;
     }
 
     // Returns true if the room is set to a specific difficulty (easy, medium,
     // or hard), or false if the room is for any difficulty.
     hasDifficulty()
     {
-        return this.difficulty != '';
+        return this.difficulty != null;
     }
 }
 
@@ -62,17 +93,23 @@ class RoomConfiguration
 // trivia.
 class TriviaRoom extends RoomBase
 {
-    constructor(ioInstance, deleteOnLastUser = true, config)
+    constructor(ioInstance, name, deleteOnLastUser = true, config)
     {
         super(ioInstance);
 
         this.maxSeconds       = 30;
         this.id               = generateId();
+        this.name             = name;
         this.timerId          = -1;
         this.secondsLeft      = this.maxSeconds;
         this.currentQuestion  = null;
         this.deleteOnLastUser = deleteOnLastUser;
         this.config           = config;
+
+        // Maps usernames to the points that that user has.
+        // I.e. if bob has 123 points, then:
+        // userPoints["bob"] === 123
+        this.userPoints       = {};
 
         this.requestNewQuestion();
     }
@@ -81,14 +118,21 @@ class TriviaRoom extends RoomBase
     addUser(user)
     {
         super.addUser(user);
+        this.userPoints[user.nickname] = 0;
+
         this.sendCurrentQuestionToUser(user);
         this.sendEnteredGameRoom(user);
+        this.sendUserStatsToOne(user);
+
+        triviaEventEmitter.emit(events.UPDATE_ROOM, this);
     }
 
     // Remove the given user from the room.
     removeUser(user)
     {
         super.removeUser(user);
+        delete this.userPoints[user.nickname];
+
         this.sendLeftGameRoom(user);
 
         // If this was the last user, remove this room
@@ -101,6 +145,10 @@ class TriviaRoom extends RoomBase
             triviaEventEmitter.emit(events.DELETE_ROOM, this);
             console.log(`Deleted room ${this.id}.`);
         }
+        else
+        {
+            triviaEventEmitter.emit(events.UPDATE_ROOM, this);
+        }
     }
 
     // Tell each connected user if their answer was right or wrong
@@ -109,15 +157,33 @@ class TriviaRoom extends RoomBase
     {
         if (this.currentQuestion)
         {
+            // Remember the current point totals for later.
+            let prevPoints = {};
+            Object.assign(prevPoints, this.userPoints);
+
             this.users.forEach
             (
                 (user) => 
                 {
+                    let result = user.answerIndex === this.currentQuestion.correctAnswerIndex;
+
+                    // Add/deduct points to the user for their result.
+                    if (result) this.userPoints[user.nickname] += this.currentQuestion.getPointValue();
+                    else        this.userPoints[user.nickname] -= this.currentQuestion.getPointValue();
+
+                    // Don't let points go below 0.
+                    if (this.userPoints[user.nickname] < 0) this.userPoints[user.nickname] = 0;
+
                     console.log(`Sending answer result to ${user.nickname}`);
-                    user.socket.emit('answer result', user.answerIndex === this.currentQuestion.correctAnswerIndex)
+                    user.socket.emit('answer result', result)
                     user.unselectAnswer();
                 }
             );
+
+            // Notify users of the changes. Use prevPoints to
+            // calculate how many points each user won/lost in
+            // this round.
+            this.sendUserStatsToAll(prevPoints);
         }
     }
 
@@ -147,6 +213,44 @@ class TriviaRoom extends RoomBase
     sendLeftGameRoom(user)
     {
         user.socket.emit('left game room');
+    }
+
+    // Notify all users in the room of point total changes for each user.
+    // For example, if everyone now has 100 points, that change would be reflected
+    // here.
+    sendUserStatsToAll(previousPointTotals = null)
+    {
+        let updates = this.getUserStats(previousPointTotals);
+        this.io.to(this.id).emit('set user stats', updates);
+    }
+
+    // Send the point totals to a specific user.
+    sendUserStatsToOne(user)
+    {
+        let updates = this.getUserStats();
+        user.socket.emit('set user stats', updates);
+    }
+
+    // Get the stats of all users. If previousPointTotals
+    // is provided, it will calculate the change in each stat.
+    // Right now, the only stat is points.
+    getUserStats(previousPointTotals = null)
+    {
+        let updates = [];
+        this.users.forEach
+        (
+            u => 
+            updates.push
+            (
+                {
+                    nickname: u.nickname,
+                    points  : this.userPoints[u.nickname],
+                    change  : previousPointTotals ? this.userPoints[u.nickname] - previousPointTotals[u.nickname] : 0
+                }
+            )
+        );
+
+        return updates;
     }
 
     // Set the current question.
@@ -194,10 +298,12 @@ function generateId()
 
 // Make a new trivia room. ioInstance is the socket.io handle,
 // and is needed by the room to send and receive messages.
-function makeNewRoom(ioInstance, deleteOnLastUser = true, difficulty = '', category = -1)
+function makeNewRoom(ioInstance, name, deleteOnLastUser = true, difficulty = null, categoryId = null)
 {
-    let config = new RoomConfiguration(category, difficulty);
-    let room   = new TriviaRoom(ioInstance, deleteOnLastUser, config);
+    // Translate the category ID into a Category object.
+    let category = questionSource.getCategoryById(categoryId);
+    let config   = new RoomConfiguration(category, difficulty);
+    let room     = new TriviaRoom(ioInstance, name, deleteOnLastUser, config);
 
     rooms[room.getId()] = room;
 
@@ -247,3 +353,4 @@ module.exports.getRoomById        = getRoomById;
 module.exports.getRoomIdList      = getRoomIdList;
 module.exports.triviaEventEmitter = triviaEventEmitter;
 module.exports.events             = events;
+module.exports.difficulty         = difficulty;

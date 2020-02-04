@@ -74,6 +74,10 @@ class User {
 function initializeUser(user) 
 {
     // Called when the user selects an answer.
+    /**
+     * 'answer' comes with a number, the index of the answer the
+     * user selected.
+     */
     user.socket.on
     (
         'answer', (answerNumber) => 
@@ -89,6 +93,9 @@ function initializeUser(user)
     // Add the user to the given room if it exists.
     user.socket.on
     (
+        /**
+         * 'join room' comes with a single string, the ID of the room to join.
+         */
         'join room', (id) =>
         {
             console.log(`${user.nickname} requested to join room ${id}`);
@@ -115,11 +122,20 @@ function initializeUser(user)
     // Create a new room and add the user to it.
     user.socket.on
     (
-        'create room', (roomConfig) => // see class RoomConfiguration in trivia-room.js
+        // 'create room' comes with an object with the given parameters:
+        /**
+         * {
+         *  difficulty: string,
+         *  name:       string,
+         *  categoryId: number
+         * }
+         */
+        
+        'create room', (roomInfo) =>
         {
             console.log(`${user.nickname} is creating a new room with the following config:`);
-            console.log(roomConfig);
-            let newRoom = trivia.makeNewRoom(io, true, roomConfig.difficulty, roomConfig.category);
+            console.log(roomInfo);
+            let newRoom = trivia.makeNewRoom(io, roomInfo.name, true, roomInfo.difficulty, roomInfo.categoryId);
             newRoom.addUser(user);
         }
     );
@@ -140,21 +156,26 @@ function initializeUser(user)
 
     // When a user requests a list of available categories,
     // send it to them.
+    // Categories are sent in the following format:
+    /**
+     * [
+     *  {id: 0, name: 'some category'},
+     *  {id: 1, name: 'another category'},
+     *  ...
+     * ]
+     */
     user.socket.on
     (
         'get category list', () =>
         {
-            questions.getCategories().then
-            (
-                (categories) =>
-                {
-                    user.socket.emit('category list', categories);
-                }
-            );
+            user.socket.emit('category list', questions.getCategories());
         }
     );
 }
 
+// Sets the user's socket to wait for the user to select a nickname.
+// The socket also starts listening for the disconnect event at this
+// point.
 function waitForNickname(user)
 {
     // Set the user's nickname and add them to the lobby.

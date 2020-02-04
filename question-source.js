@@ -3,15 +3,20 @@ const axios  = require('axios');
 
 let categories = [];
 
+// Returns a Promise that resolves when initialization is complete.
+// Put any code that should go after this module initializes in the
+// 'then' part of the returned Promise.
+function init()
+{
+    return loadCategories();
+}
+
 function getTriviaQuestionAsync(config, onComplete, onError)
 {
     let url = 'https://opentdb.com/api.php?amount=1';
 
-    if (config.difficulty.length > 0) url += `&difficulty=${config.difficulty}`;
-    if (config.category != -1)        url += `&category=${config.category}`;
-
-    console.log(config);
-    console.log('getting from url' + url);
+    if (config.hasDifficulty()) url += `&difficulty=${config.difficulty}`;
+    if (config.hasCategory())   url += `&category=${config.category.id}`;
 
     axios.get(url)
         .then
@@ -39,9 +44,9 @@ function getTriviaQuestionAsync(config, onComplete, onError)
                 let correctIndex = answers.findIndex((a) => a === response.correct_answer);
 
                 // Construct the TriviaQuestion object that will represent the question.
-                let triviaQuestion        = new trivia.TriviaQuestion(question, answers, correctIndex);
-                triviaQuestion.category   = response.category;
-                triviaQuestion.difficulty = response.difficulty;
+                let triviaQuestion            = new trivia.TriviaQuestion(question, answers, correctIndex);
+                triviaQuestion.categoryName   = response.category;
+                triviaQuestion.difficulty     = response.difficulty;
 
                 onComplete(triviaQuestion);
             }
@@ -55,7 +60,7 @@ function getTriviaQuestionAsync(config, onComplete, onError)
 // (a string).
 //
 // Example: [ {id: 9, name: "General Knowledge"}, ... ]
-function getCategories()
+function loadCategories()
 { 
     if (categories.length === 0)
     {
@@ -81,5 +86,24 @@ function getCategories()
     }
 }
 
+// Return the Category object with the given ID, or undefined
+// if no such category exists.
+function getCategoryById(id)
+{
+    return categories.find(c => c.id === id);
+}
+
+// Returns a list of all of the available categories as an array
+// of Category objects. Be sure you have called loadCategories()
+// first, and that the promise returned by loadCategories()
+// has resolved.
+function getCategories()
+{
+    return categories;
+}
+
 module.exports.getTriviaQuestionAsync = getTriviaQuestionAsync;
+module.exports.loadCategories         = loadCategories;
 module.exports.getCategories          = getCategories;
+module.exports.getCategoryById        = getCategoryById;
+module.exports.init                   = init;

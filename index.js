@@ -17,30 +17,31 @@ app.use(bodyParser);
 // Initialize the User Module.
 user.init(io);
 
-let lobby = new Lobby(io);
-
-// Create a bunch of test rooms. Stagger them over time.
-/*
-for (let i=0; i<3; ++i)
-{
-    setTimeout(trivia.makeNewRoom, 10000*i, io, false);
-}
-*/
-
-// Output a list of all of the available categories. For debugging purposes.
-questions.getCategories().then((categories) => console.log(categories));
-
-io.on
+// Initialize the question source module.
+questions.init()
+.then
 (
-    'connection', 
-    (socket) => 
+    _ =>
     {
-        let newUser = new user.User(socket, '', lobby);
-        user.allUsers.push(newUser);
-        newUser.socket.emit('need nickname');
-        console.log("User connected.");
-    }
-);
+        console.log("Question categories loaded.");
+        let lobby = new Lobby(io);
+        
+        // Create a basic room.
+        trivia.makeNewRoom(io, 'The Any Room', false);
 
-console.log('Trivia server active on port 3000.');
-http.listen(3000);
+        io.on
+        (
+            'connection', 
+            (socket) => 
+            {
+                let newUser = new user.User(socket, '', lobby);
+                user.allUsers.push(newUser);
+                newUser.socket.emit('need nickname');
+                console.log("A user connected.");
+            }
+        );
+        
+        console.log('Trivia server active on port 3000.');
+        http.listen(3000);
+    }
+).catch(error => console.log(error));

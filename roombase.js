@@ -22,8 +22,8 @@ class RoomBase
 
         // Add the user to THIS room.
         this.users.push(user);
-        this.sendUserJoined(user);
         user.setRoom(this);
+        this.sendUserJoined(user);
         
         this.sendUserList(user);
     }
