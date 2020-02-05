@@ -98,7 +98,7 @@ function initializeUser(user)
          */
         'join room', (id) =>
         {
-            console.log(`${user.nickname} requested to join room ${id}`);
+            console.log(`${user.nickname} requested to join room ${id}.`);
             let room = trivia.getRoomById(id);
             if (room)
             {
@@ -114,7 +114,7 @@ function initializeUser(user)
         {
             if (!user.room) return;
 
-            console.log(`${user.nickname} wants to leave room ${user.room.id}`);
+            console.log(`${user.nickname} is leaving room ${user.room.id}.`);
             user.lobby.addUser(user);
         }
     );
@@ -194,7 +194,7 @@ function waitForNickname(user)
                     user.lobby.addUser(user);
                     user.socket.emit('good nickname');
 
-                    console.log("Setting nickname to " + user.nickname);
+                    console.log("Setting nickname to " + user.nickname + ".");
                 }
                 else
                 {

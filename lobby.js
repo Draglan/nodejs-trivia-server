@@ -107,11 +107,11 @@ function makeRoomInfoObject(room)
 {
     let result = 
     {
-        id: room.id,
-        name: room.name,
-        playerCount: room.users.length,
+        id          : room.id,
+        name        : room.name,
+        playerCount : room.users.length,
         categoryName: room.config.category ? room.config.category.name : 'Any',
-        difficulty: room.config.difficulty ? room.config.difficulty : 'Any'
+        difficulty  : room.config.difficulty ? room.config.difficulty : 'Any'
     };
 
     return result;

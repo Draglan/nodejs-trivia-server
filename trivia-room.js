@@ -19,6 +19,7 @@ const events =
     UPDATE_ROOM: 'updateRoom'  // Args: the room that was updated
 }
 
+// The different levels of difficulty.
 const difficulty =
 {
     EASY  : 'easy',
@@ -59,6 +60,20 @@ class Category
     {
         this.id   = id;
         this.name = name;
+    }
+}
+
+/*
+    The stats of a given user, like points, number
+    of questions right/wrong, etc.
+*/
+class UserStatistics
+{
+    constructor(points = 0, numCorrect = 0, numWrong = 0)
+    {
+        this.points         = points;
+        this.questionsRight = numCorrect;
+        this.questionsWrong = numWrong;
     }
 }
 
@@ -106,10 +121,8 @@ class TriviaRoom extends RoomBase
         this.deleteOnLastUser = deleteOnLastUser;
         this.config           = config;
 
-        // Maps usernames to the points that that user has.
-        // I.e. if bob has 123 points, then:
-        // userPoints["bob"] === 123
-        this.userPoints       = {};
+        // Maps usernames to the stats each user has.
+        this.userStats = {};
 
         this.requestNewQuestion();
     }
@@ -118,11 +131,11 @@ class TriviaRoom extends RoomBase
     addUser(user)
     {
         super.addUser(user);
-        this.userPoints[user.nickname] = 0;
+        this.userStats[user.nickname] = new UserStatistics();
 
         this.sendCurrentQuestionToUser(user);
         this.sendEnteredGameRoom(user);
-        this.sendUserStatsToOne(user);
+        this.sendUserStatsToAll(user);
 
         triviaEventEmitter.emit(events.UPDATE_ROOM, this);
     }
@@ -131,9 +144,10 @@ class TriviaRoom extends RoomBase
     removeUser(user)
     {
         super.removeUser(user);
-        delete this.userPoints[user.nickname];
+        delete this.userStats[user.nickname];
 
         this.sendLeftGameRoom(user);
+        this.sendUserStatsToAll(user);
 
         // If this was the last user, remove this room
         // from the room list and stop the timer.
@@ -157,33 +171,37 @@ class TriviaRoom extends RoomBase
     {
         if (this.currentQuestion)
         {
-            // Remember the current point totals for later.
-            let prevPoints = {};
-            Object.assign(prevPoints, this.userPoints);
-
             this.users.forEach
             (
                 (user) => 
                 {
                     let result = user.answerIndex === this.currentQuestion.correctAnswerIndex;
+                    let stats = this.userStats[user.nickname];
 
-                    // Add/deduct points to the user for their result.
-                    if (result) this.userPoints[user.nickname] += this.currentQuestion.getPointValue();
-                    else        this.userPoints[user.nickname] -= this.currentQuestion.getPointValue();
+                    // Give/take points to/from the user.
+                    if (result) 
+                    {
+                        stats.points += this.currentQuestion.getPointValue();
+                        ++stats.questionsRight;
+                    }
+                    else
+                    {
+                        stats.points -= this.currentQuestion.getPointValue();
+                        ++stats.questionsWrong;
+                    }
 
-                    // Don't let points go below 0.
-                    if (this.userPoints[user.nickname] < 0) this.userPoints[user.nickname] = 0;
+                    // Prevent points from going below 0.
+                    if (stats.points < 0) stats.points = 0;
 
-                    console.log(`Sending answer result to ${user.nickname}`);
+                    // Send the result and de-select their answer.
+                    console.log(`Sending answer result to ${user.nickname}. Result: ${result ? 'Correct' : 'Incorrect'}.`);
                     user.socket.emit('answer result', result)
                     user.unselectAnswer();
                 }
             );
 
-            // Notify users of the changes. Use prevPoints to
-            // calculate how many points each user won/lost in
-            // this round.
-            this.sendUserStatsToAll(prevPoints);
+            // Notify users of the changes.
+            this.sendUserStatsToAll();
         }
     }
 
@@ -218,9 +236,9 @@ class TriviaRoom extends RoomBase
     // Notify all users in the room of point total changes for each user.
     // For example, if everyone now has 100 points, that change would be reflected
     // here.
-    sendUserStatsToAll(previousPointTotals = null)
+    sendUserStatsToAll()
     {
-        let updates = this.getUserStats(previousPointTotals);
+        let updates = this.getUserStats();
         this.io.to(this.id).emit('set user stats', updates);
     }
 
@@ -231,10 +249,8 @@ class TriviaRoom extends RoomBase
         user.socket.emit('set user stats', updates);
     }
 
-    // Get the stats of all users. If previousPointTotals
-    // is provided, it will calculate the change in each stat.
-    // Right now, the only stat is points.
-    getUserStats(previousPointTotals = null)
+    // Compile the stats of all the users.
+    getUserStats()
     {
         let updates = [];
         this.users.forEach
@@ -244,8 +260,7 @@ class TriviaRoom extends RoomBase
             (
                 {
                     nickname: u.nickname,
-                    points  : this.userPoints[u.nickname],
-                    change  : previousPointTotals ? this.userPoints[u.nickname] - previousPointTotals[u.nickname] : 0
+                    ...this.userStats[u.nickname]
                 }
             )
         );
@@ -258,7 +273,6 @@ class TriviaRoom extends RoomBase
     {
         // Reset all of the user's selected answers and
         // tell them if they got the answer right or wrong.
-
         this.sendAnswerResultAndResetSelection();
 
         this.currentQuestion = question;
@@ -272,13 +286,13 @@ class TriviaRoom extends RoomBase
     {
         questionSource.getTriviaQuestionAsync
         (
-            this.config,
+            this,
             (q) => 
             {
                 this.setNewQuestion(q);
                 this.timerId = setTimeout(timer, 1000, this);
             },
-            (e) => console.log(e)
+            (e) => console.log(`Question retrieval error: ${e}`)
         );
     }
 }

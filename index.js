@@ -28,7 +28,7 @@ questions.init()
         
         // Create a basic room.
         trivia.makeNewRoom(io, 'The Any Room', false);
-
+        
         io.on
         (
             'connection', 
