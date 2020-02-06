@@ -9,4 +9,5 @@ node index.js</code></pre>
 Then open <code>http://localhost:3000</code> in your browser to play the game.
 
 ## Screenshot
-![Screenshot of the trivia game](https://github.com/Draglan/nodejs-trivia-server/blob/master/screenshot.png)
+![Screenshot of the trivia game](https://github.com/Draglan/angular-trivia-client/blob/master/screenshot.png)
+Screenshot taken with the client: https://github.com/Draglan/angular-trivia-client
