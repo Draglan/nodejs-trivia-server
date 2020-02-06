@@ -3,7 +3,10 @@ const questions = require('./question-source');
 
 // The list of connected users.
 let allUsers = [];
-let io       = null;
+let io = null;
+
+// Requests made by users to join a room before they have a nickname.
+let pendingJoinRoomRequests = {};
 
 /* 
     Initialize the User Module.
@@ -85,7 +88,6 @@ function initializeUser(user)
             if (!user.hasSelectedAnswer()) 
             {
                 user.selectAnswer(answerNumber);
-                console.log(`${user.nickname} selected answer ${answerNumber}.`);
             }
         }
     );
@@ -135,7 +137,7 @@ function initializeUser(user)
         {
             console.log(`${user.nickname} is creating a new room with the following config:`);
             console.log(roomInfo);
-            let newRoom = trivia.makeNewRoom(io, roomInfo.name, true, roomInfo.difficulty, roomInfo.categoryId);
+            let newRoom = trivia.makeNewRoom(io, roomInfo.name, true, roomInfo.difficulty, roomInfo.categoryId, roomInfo.maxSeconds);
             newRoom.addUser(user);
         }
     );
@@ -190,9 +192,23 @@ function waitForNickname(user)
                 if (!isNicknameTaken(nickname))
                 {
                     user.nickname = nickname;
+
+                    // Stop listening to the version of 'join room' listed below.
+                    user.socket.removeAllListeners('join room');
+
                     initializeUser(user);
-                    user.lobby.addUser(user);
                     user.socket.emit('good nickname');
+
+                    if (user.socket.id in pendingJoinRoomRequests)
+                    {
+                        let room = trivia.getRoomById(pendingJoinRoomRequests[user.socket.id]);
+                        if (room) room.addUser(user);
+                        else      user.lobby.addUser(user);
+
+                        // Delete the request.
+                        delete pendingJoinRoomRequests[user.socket.id];
+                    }
+                    else user.lobby.addUser(user);
 
                     console.log("Setting nickname to " + user.nickname + ".");
                 }
@@ -208,6 +224,18 @@ function waitForNickname(user)
         }
     );
     
+    // When a user requests to join a room before they have a nickname,
+    // remember the request so they can be moved straight into a room
+    // rather than going into the lobby.
+    user.socket.on
+    (
+        'join room', (id) =>
+        {
+            console.log("Remembering that user wants to join " + id + "...");
+            pendingJoinRoomRequests[user.socket.id] = id;
+        }
+    );
+
     // Remove the user from the user list when they disconnect.
     user.socket.on
     (
@@ -215,6 +243,7 @@ function waitForNickname(user)
         {
             console.log(`${user.nickname || '<nameless user>'} disconnected.`);
             allUsers.splice(allUsers.findIndex((u) => user === u), 1);
+            delete pendingJoinRoomRequests[user.socket.id];
 
             // Remove the user from the room they are currently in, if they are
             // in a room at all.

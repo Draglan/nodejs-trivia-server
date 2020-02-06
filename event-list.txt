@@ -6,6 +6,7 @@ From server to user:
     | ----------------- | ------------------------------------------------------------------------------------------- |
     | seconds left      | Sets the number of seconds left on the current question.                                    |
     | set question      | Sets the current question and its answers.                                                  |
+    | end question      | Sent when answers are no longer accepted for the current question.                          |
     | answer result     | Sent to each user to notify them if they got the question right or wrong.                   |
     | user joined       | Sent when another user joins the room or lobby.                                             |
     | user left         | Sent when another user leaves the room or lobby.                                            |
@@ -24,7 +25,7 @@ From server to user:
     | nickname taken    | Sent to the user when the nickname they chose was already taken.                            |
     | message           | Sent to the user when someone in the room sends a message.                                  |
     | category list     | Contains a list of categories available to users.                                           |
-    | *set user stats   | Sent to users in a room when point values change.                                           |
+    | set user stats    | Sent to users in a room when point values change.                                           |
 
 From user to server:
 
