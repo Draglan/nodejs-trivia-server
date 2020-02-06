@@ -27,7 +27,8 @@ questions.init()
         let lobby = new Lobby(io);
         
         // Create a basic room.
-        trivia.makeNewRoom(io, 'The Any Room', false);
+        let room = trivia.makeNewRoom(io, 'The Any Room', false);
+        room.config.canSkipQuestions = true;
 
         io.on
         (

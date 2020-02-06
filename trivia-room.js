@@ -17,7 +17,7 @@ const events =
     NEW_ROOM   : 'newRoom',    // Args: the room that was created
     DELETE_ROOM: 'deleteRoom', // Args: the room that was deleted
     UPDATE_ROOM: 'updateRoom'  // Args: the room that was updated
-}
+};
 
 // The different levels of difficulty.
 const difficulty =
@@ -25,7 +25,14 @@ const difficulty =
     EASY  : 'easy',
     MEDIUM: 'medium',
     HARD  : 'hard'
-}
+};
+
+const answerResult = 
+{
+    INCORRECT: 0,
+    CORRECT  : 1,
+    SKIPPED  : 2
+};
 
 // Represents a trivia question.
 class TriviaQuestion 
@@ -84,11 +91,12 @@ class UserStatistics
 */
 class RoomConfiguration
 {
-    constructor(category = null, difficulty = null, maxSeconds = 30)
+    constructor(category = null, difficulty = null, maxSeconds = 30, canSkipQuestions = false)
     {
-        this.category   = category;   // null if no category
-        this.difficulty = difficulty; // easy, medium, hard, or null
-        this.maxSeconds = maxSeconds;
+        this.category         = category;   // null if no category
+        this.difficulty       = difficulty; // easy, medium, hard, or null
+        this.maxSeconds       = maxSeconds;
+        this.canSkipQuestions = canSkipQuestions;
     }
 
     // Returns true if the room is set to a specific category, or false
@@ -122,6 +130,7 @@ class TriviaRoom extends RoomBase
         this.currentQuestion         = null;
         this.deleteOnLastUser        = deleteOnLastUser;
         this.config                  = config;
+        this.acceptAnswers           = true;
 
         // Maps usernames to the stats each user has.
         this.userStats = {};
@@ -135,6 +144,23 @@ class TriviaRoom extends RoomBase
         super.addUser(user);
         this.userStats[user.nickname] = new UserStatistics();
 
+        // Called when the user selects an answer.
+        /**
+         * 'answer' comes with a number, the index of the answer the
+         * user selected.
+         */
+        user.socket.on
+        (
+            'answer', (answerNumber) => 
+            {
+                let stats = this.userStats[user.nickname] || null;
+                if (stats && stats.selectedAnswerIndex === -1 && this.acceptAnswers) 
+                {
+                    stats.selectedAnswerIndex = answerNumber;
+                }
+            }
+        );
+
         this.sendCurrentQuestionToUser(user);
         this.sendEnteredGameRoom(user);
         this.sendUserStatsToAll(user);
@@ -147,6 +173,9 @@ class TriviaRoom extends RoomBase
     {
         super.removeUser(user);
         delete this.userStats[user.nickname];
+
+        // Stop listening for answer events from this user.
+        user.socket.removeAllListeners('answer');
 
         this.sendLeftGameRoom(user);
         this.sendUserStatsToAll(user);
@@ -170,7 +199,7 @@ class TriviaRoom extends RoomBase
     // Tell each connected user if their answer was right or wrong
     // and reset their selected answer. Also compiles and sends
     // the new user stats.
-    sendAnswerResultAndResetSelection()
+    sendAnswerResultsAndResetSelections()
     {
         if (this.currentQuestion)
         {
@@ -178,26 +207,45 @@ class TriviaRoom extends RoomBase
             (
                 (user) => 
                 {
-                    let result = user.answerIndex === this.currentQuestion.correctAnswerIndex;
                     let stats = this.userStats[user.nickname];
+                    let result;
 
-                    // Give/take points to/from the user.
-                    let pointsChange = result ? this.currentQuestion.getPointValue() : -this.currentQuestion.getPointValue();
-                    stats.points += pointsChange;
-                    stats.pointsChange = pointsChange;
-                    result ? ++stats.questionsRight : ++stats.questionsWrong;
+                    if (stats.selectedAnswerIndex === -1 && this.config.canSkipQuestions)
+                    {
+                        // Set the answer to skipped if they made no selection and
+                        // the room is configured to allow skips.
+                        result = answerResult.SKIPPED;
+                        stats.pointsChange = 0;
+                        ++stats.questionsWrong;
+                    }
+                    else
+                    {
+                        // Otherwise, mark the answer as right or wrong.
+                        result = stats.selectedAnswerIndex === this.currentQuestion.correctAnswerIndex 
+                            ? answerResult.CORRECT 
+                            : answerResult.INCORRECT;
+                        
+                        stats.pointsChange = result === answerResult.CORRECT 
+                            ? this.currentQuestion.getPointValue() 
+                            : -this.currentQuestion.getPointValue();
 
-                    // Prevent points from going below 0.
+                        result === answerResult.CORRECT 
+                            ? ++stats.questionsRight 
+                            : ++stats.questionsWrong;
+                    }
+
+                    // Update points and send the result.
+                    stats.points += stats.pointsChange;
                     if (stats.points < 0) stats.points = 0;
-
-                    // Send the result and de-select their answer.
                     user.socket.emit('answer result', result)
-                    user.unselectAnswer();
                 }
             );
 
             // Notify users of the changes.
             this.sendUserStatsToAll();
+
+            // Reset answer selections.
+            for (let u in this.userStats) this.userStats[u].selectedAnswerIndex = -1;
         }
     }
 
@@ -267,10 +315,6 @@ class TriviaRoom extends RoomBase
     // Set the current question.
     setNewQuestion(question) 
     {
-        // Reset all of the user's selected answers and
-        // tell them if they got the answer right or wrong.
-        this.sendAnswerResultAndResetSelection();
-
         this.currentQuestion = question;
         this.secondsLeft     = this.config.maxSeconds;
 
@@ -288,6 +332,7 @@ class TriviaRoom extends RoomBase
             this,
             (q) => 
             {
+                this.acceptAnswers = true;
                 this.setNewQuestion(q);
                 this.timerId = setTimeout(timer, 1000, this);
             },
@@ -311,12 +356,13 @@ function generateId()
 
 // Make a new trivia room. ioInstance is the socket.io handle,
 // and is needed by the room to send and receive messages.
-function makeNewRoom(ioInstance, name, deleteOnLastUser = true, difficulty = null, categoryId = null, maxSeconds = 30)
+function makeNewRoom(ioInstance, name, deleteOnLastUser = true, config = null)
 {
-    // Translate the category ID into a Category object.
-    let category = questionSource.getCategoryById(categoryId);
-    let config   = new RoomConfiguration(category, difficulty, maxSeconds);
-    let room     = new TriviaRoom(ioInstance, name, deleteOnLastUser, config);
+    // Default config
+    if (!config)
+        config = new RoomConfiguration();
+
+    let room = new TriviaRoom(ioInstance, name, deleteOnLastUser, config);
 
     rooms[room.getId()] = room;
 
@@ -345,7 +391,9 @@ function timer(room)
     if (room.secondsLeft === 0) 
     {
         room.io.to(room.id).emit('end question');
-        setTimeout(() => room.requestNewQuestion(), 3000);
+        room.sendAnswerResultsAndResetSelections();
+        room.acceptAnswers = false;
+        setTimeout(() => room.requestNewQuestion(), 5000);
     }
     else 
     {

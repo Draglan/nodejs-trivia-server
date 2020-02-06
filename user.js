@@ -27,9 +27,6 @@ class User {
     */
     constructor(socket, nickname, lobby) 
     {
-        // The answer this user selected. If -1,
-        // it means they haven't selected an answer yet.
-        this.answerIndex = -1;
         this.socket      = socket;
         this.nickname    = nickname;
         this.lobby       = lobby;
@@ -39,10 +36,6 @@ class User {
         // other events.
         waitForNickname(this);
     }
-
-    hasSelectedAnswer()     { return this.answerIndex != -1;         }
-    selectAnswer(answerNum) { this.answerIndex         = answerNum;  }
-    unselectAnswer()        { this.answerIndex         = -1;         }
 
     // Assign the user to the given room, and set
     // the user's socket to talk to that room.
@@ -76,22 +69,6 @@ class User {
 // Initialize a user's socket events.
 function initializeUser(user) 
 {
-    // Called when the user selects an answer.
-    /**
-     * 'answer' comes with a number, the index of the answer the
-     * user selected.
-     */
-    user.socket.on
-    (
-        'answer', (answerNumber) => 
-        {
-            if (!user.hasSelectedAnswer()) 
-            {
-                user.selectAnswer(answerNumber);
-            }
-        }
-    );
-
     // Add the user to the given room if it exists.
     user.socket.on
     (
@@ -127,17 +104,28 @@ function initializeUser(user)
         // 'create room' comes with an object with the given parameters:
         /**
          * {
-         *  difficulty: string,
-         *  name:       string,
-         *  categoryId: number
+         *  difficulty      : string,
+         *  name:           : string,
+         *  categoryId      : number,
+         *  maxSeconds      : number,
+         *  canSkipQuestions: boolean
          * }
          */
         
         'create room', (roomInfo) =>
-        {
+        {     
+            let config = new trivia.RoomConfiguration
+            (
+                questions.getCategoryById(roomInfo.categoryId),
+                roomInfo.difficulty,
+                roomInfo.maxSeconds,
+                roomInfo.canSkipQuestions
+            );
+
             console.log(`${user.nickname} is creating a new room with the following config:`);
-            console.log(roomInfo);
-            let newRoom = trivia.makeNewRoom(io, roomInfo.name, true, roomInfo.difficulty, roomInfo.categoryId, roomInfo.maxSeconds);
+            console.log(config);
+
+            let newRoom = trivia.makeNewRoom(io, roomInfo.name, true, config);
             newRoom.addUser(user);
         }
     );
