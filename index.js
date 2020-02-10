@@ -2,7 +2,6 @@ const express    = require('express');
 const app        = express();
 const http       = require('http').createServer(app);
 const io         = require('socket.io')(http);
-const bodyParser = require('body-parser');
 const user       = require('./user');
 const trivia     = require('./trivia-room');
 const Lobby      = require('./lobby');
@@ -10,9 +9,6 @@ const questions  = require('./question-source');
 
 // Serve static files from the current working directory.
 app.use(express.static('.'));
-
-// Parse JSON requests.
-app.use(bodyParser);
 
 // Initialize the User Module.
 user.init(io);

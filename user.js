@@ -119,7 +119,8 @@ function initializeUser(user)
                 questions.getCategoryById(roomInfo.categoryId),
                 roomInfo.difficulty,
                 roomInfo.maxSeconds,
-                roomInfo.canSkipQuestions
+                roomInfo.canSkipQuestions,
+                roomInfo.questionCount
             );
 
             console.log(`${user.nickname} is creating a new room with the following config:`);

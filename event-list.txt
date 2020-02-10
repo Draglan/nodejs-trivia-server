@@ -7,6 +7,7 @@ From server to user:
     | seconds left      | Sets the number of seconds left on the current question.                                                 |
     | set question      | Sets the current question and its answers.                                                               |
     | end question      | Sent when answers are no longer accepted for the current question.                                       |
+    | game over         | Sent when the game is complete. Includes a list of players in order of decreasing points.                |
     | answer result     | Sent to each user to notify them if they got the question right, wrong, or if they skipped the question. |
     | user joined       | Sent when another user joins the room or lobby.                                                          |
     | user left         | Sent when another user leaves the room or lobby.                                                         |

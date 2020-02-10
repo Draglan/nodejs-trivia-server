@@ -91,12 +91,13 @@ class UserStatistics
 */
 class RoomConfiguration
 {
-    constructor(category = null, difficulty = null, maxSeconds = 30, canSkipQuestions = false)
+    constructor(category = null, difficulty = null, maxSeconds = 30, canSkipQuestions = false, numQuestions = 0)
     {
         this.category         = category;   // null if no category
         this.difficulty       = difficulty; // easy, medium, hard, or null
         this.maxSeconds       = maxSeconds;
         this.canSkipQuestions = canSkipQuestions;
+        this.questionCount    = numQuestions; // 0 means unlimited questions; the game never ends
     }
 
     // Returns true if the room is set to a specific category, or false
@@ -123,14 +124,15 @@ class TriviaRoom extends RoomBase
     {
         super(ioInstance);
 
-        this.id                      = generateId();
-        this.name                    = name;
-        this.timerId                 = -1;
-        this.secondsLeft             = config.maxSeconds;
-        this.currentQuestion         = null;
-        this.deleteOnLastUser        = deleteOnLastUser;
-        this.config                  = config;
-        this.acceptAnswers           = true;
+        this.id                = generateId();
+        this.name              = name;
+        this.timerId           = -1;
+        this.secondsLeft       = config.maxSeconds;
+        this.currentQuestion   = null;
+        this.deleteOnLastUser  = deleteOnLastUser;
+        this.config            = config;
+        this.acceptAnswers     = true;
+        this.questionsAnswered = 0;
 
         // Maps usernames to the stats each user has.
         this.userStats = {};
@@ -160,10 +162,14 @@ class TriviaRoom extends RoomBase
                 }
             }
         );
-
-        this.sendCurrentQuestionToUser(user);
+        
         this.sendEnteredGameRoom(user);
         this.sendUserStatsToAll(user);
+
+        if (!this.isGameOver())
+            this.sendCurrentQuestionToOne(user);
+        else
+            this.sendGameOverToOne(user);
 
         triviaEventEmitter.emit(events.UPDATE_ROOM, this);
     }
@@ -184,10 +190,7 @@ class TriviaRoom extends RoomBase
         // from the room list and stop the timer.
         if (this.users.length === 0 && this.deleteOnLastUser)
         {
-            delete rooms[this.id];
-            clearTimeout(this.timerId);
-            this.timerId = -1;
-            triviaEventEmitter.emit(events.DELETE_ROOM, this);
+            deleteRoom(this);
             console.log(`Deleted room ${this.id}.`);
         }
         else
@@ -257,11 +260,36 @@ class TriviaRoom extends RoomBase
     }
 
     // Send the current question to a specific user.
-    sendCurrentQuestionToUser(user)
+    sendCurrentQuestionToOne(user)
     {
         if (this.currentQuestion)
         {
-            user.socket.emit('set question', this.currentQuestion);
+            user.socket.emit
+            (
+                'set question', 
+                {
+                    ...this.currentQuestion,
+                    questionNumber: this.questionsAnswered + 1, 
+                    questionCount: this.config.questionCount
+                }
+            );
+        }
+    }
+
+    // Send the current question to everyone in the lobby.
+    sendCurrentQuestionToAll()
+    {
+        if (this.currentQuestion)
+        {
+            this.io.to(this.id).emit
+            (
+                'set question', 
+                {
+                    ...this.currentQuestion, 
+                    questionNumber: this.questionsAnswered + 1, 
+                    questionCount: this.config.questionCount
+                }
+            );
         }
     }
 
@@ -319,7 +347,7 @@ class TriviaRoom extends RoomBase
         this.secondsLeft     = this.config.maxSeconds;
 
         this.io.to(this.id).emit('seconds left', --this.secondsLeft);
-        this.io.to(this.id).emit('set question', this.currentQuestion);
+        this.sendCurrentQuestionToAll();
     }
 
     // Request a new question from the question source.
@@ -336,8 +364,45 @@ class TriviaRoom extends RoomBase
                 this.setNewQuestion(q);
                 this.timerId = setTimeout(timer, 1000, this);
             },
-            (e) => console.log(`Question retrieval error: ${e}`)
+            (e) =>
+            {
+                console.log(`Question retrieval error. Trying again in 5 seconds. Error: ${e}`);
+                setTimeout(this.requestNewQuestion.bind(this), 5000);
+            }
         );
+    }
+
+    // Send the game over signal, and the final user stats, to all
+    // users.
+    sendGameOverToAll()
+    {
+        let stats = this.getUserStats();
+        stats = stats.sort(compareStats);
+        this.io.to(this.id).emit('game over', stats);
+    }
+
+    sendGameOverToOne(user)
+    {
+        let stats = this.getUserStats();
+        stats = stats.sort(compareStats);
+        user.socket.emit('game over', stats);
+    }
+
+    isGameOver()
+    {
+        return this.questionsAnswered === this.config.questionCount && this.config.questionCount != 0;
+    }
+}
+
+// Remove the given room from the room list.
+function deleteRoom(room)
+{
+    if (room && room.id in rooms)
+    {
+        clearTimeout(room.timerId);
+        room.timerId = -1;
+        delete rooms[room.id];
+        triviaEventEmitter.emit(events.DELETE_ROOM, room);
     }
 }
 
@@ -390,15 +455,45 @@ function timer(room)
 {
     if (room.secondsLeft === 0) 
     {
+        ++room.questionsAnswered;
+        room.acceptAnswers = false;
+
         room.io.to(room.id).emit('end question');
         room.sendAnswerResultsAndResetSelections();
-        room.acceptAnswers = false;
-        setTimeout(() => room.requestNewQuestion(), 5000);
+
+        if (!room.isGameOver())
+            setTimeout(() => room.requestNewQuestion(), 5000);
+        else
+        {
+            room.sendGameOverToAll();
+            
+            // Remove this room from the listing
+            if (room.deleteOnLastUser)
+                deleteRoom(room);
+        }
     }
     else 
     {
         room.io.to(room.id).emit('seconds left', --room.secondsLeft);
         room.timerId = setTimeout(timer, 1000, room);
+    }
+}
+
+function compareStats(a, b)
+{
+    if      (a.points > b.points) return -1;
+    else if (a.points < b.points) return  1;
+    else
+    {
+        let aQCount = a.questionsRight + a.questionsWrong;
+        let bQCount = b.questionsRight + b.questionsWrong;
+
+        let aRatio  = a.questionsRight / aQCount;
+        let bRatio  = b.questionsRight / bQCount;
+
+        if      (aRatio > bRatio) return -1;
+        else if (aRatio < bRatio) return 1;
+        else                      return 0;
     }
 }
 
